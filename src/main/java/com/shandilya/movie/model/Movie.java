@@ -1,11 +1,22 @@
 package com.shandilya.movie.model;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import lombok.NoArgsConstructor;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Id;
 
-@Getter
-@RequiredArgsConstructor
+@Entity
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class Movie {
-    private final String movieId;
-    private final String movieName;
+    @Id
+    @Getter
+    @GeneratedValue
+    private Long id;
+    private String movieName;
+    private String genre;
 }

@@ -1,34 +1,28 @@
-package com.shandilya.movie.model;
+package com.shandilya.movie.dto;
 
-import com.shandilya.movie.dto.BookingDTO;
+import com.shandilya.movie.constants.BookingStatus;
+import com.shandilya.movie.model.Booking;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Id;
 
-@Entity
+@Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Booking {
-    @Id
-    @Getter
-    @GeneratedValue
-    private Long id;
+public class BookingDTO {
     private Long showId;
     private String seats;
     private Long userId;
     private String bookingStatus;
 
-    public BookingDTO transform() {
-        return BookingDTO.builder()
+    public Booking transform() {
+        return Booking.builder()
                 .showId(showId)
                 .seats(seats)
                 .userId(userId)
-                .bookingStatus(bookingStatus)
+                .bookingStatus(BookingStatus.CREATED.toString())
                 .build();
     }
 }

@@ -1,23 +1,40 @@
 package com.shandilya.movie.controller;
 
-import com.shandilya.movie.model.Seat;
-import com.shandilya.movie.model.Show;
+import com.shandilya.movie.dto.BookingDTO;
 import com.shandilya.movie.service.BookingService;
-import com.shandilya.movie.service.ShowService;
-import com.shandilya.movie.service.TheaterService;
-import lombok.RequiredArgsConstructor;
+import lombok.AllArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 import java.util.List;
-import java.util.stream.Collectors;
 
-@RequiredArgsConstructor
+@RestController
+@AllArgsConstructor
+@RequestMapping("/booking")
 public class BookingController {
-    private final ShowService showService;
-    private final BookingService bookingService;
-    private final TheaterService theaterService;
 
-    public String createBooking(String userId, String showId, List<String> seats) {
-        final Show show = showService.getShow(showId);
-        final List<Seat> seatsInTheater = seats.stream().map(theaterService::getSeat).collect(Collectors.toList());
-        return bookingService.createBooking(userId, show, seatsInTheater).getBookingId();
+    private final BookingService bookingService;
+
+    @PostMapping("/create")
+    public ResponseEntity<?> createBooking(@RequestBody BookingDTO bookingDTO) {
+        bookingService.createBooking(bookingDTO);
+        return ResponseEntity.ok("");
+    }
+
+    @GetMapping("/{showId}")
+    public ResponseEntity<List<BookingDTO>> getAllBookingByShowId(@PathVariable Long showId) {
+        final List<BookingDTO> allBookings = bookingService.getAllBookings(showId);
+        return new ResponseEntity<>(allBookings, HttpStatus.OK);
+    }
+
+    @GetMapping("/{bookingId}")
+    public ResponseEntity<BookingDTO> getBookingByBookingId(@PathVariable Long bookingId) {
+        final BookingDTO bookingDTO = bookingService.findByBookingId(bookingId);
+        return new ResponseEntity<>(bookingDTO, HttpStatus.OK);
+    }
+
+    @GetMapping("/{userId}")
+    public ResponseEntity<List<BookingDTO>> getBookingByUserId(@PathVariable Long userId) {
+        return new ResponseEntity<>(bookingService.findByUserId(userId), HttpStatus.OK);
     }
 }

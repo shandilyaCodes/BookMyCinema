@@ -1,81 +1,63 @@
 package com.shandilya.movie.service;
 
-import com.shandilya.movie.exceptions.BadRequestException;
-import com.shandilya.movie.exceptions.NotFoundException;
-import com.shandilya.movie.exceptions.SeatPermanentlyUnavailableException;
-import com.shandilya.movie.locker.ISeatLocker;
+import com.shandilya.movie.dto.BookingDTO;
+import com.shandilya.movie.exceptions.BookingNotFoundException;
+import com.shandilya.movie.exceptions.SeatAlreadyBookedException;
 import com.shandilya.movie.model.Booking;
-import com.shandilya.movie.model.Seat;
-import com.shandilya.movie.model.Show;
-
+import com.shandilya.movie.repository.BookingRepository;
+import com.shandilya.movie.utils.CommonUtils;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Service
+@RequiredArgsConstructor
 public class BookingService {
 
-    private final Map<String, Booking> bookingMap;
-    private final ISeatLocker seatLocker;
+    private final SeatLockService seatLockService;
+    private final BookingRepository bookingRepository;
 
-    public BookingService(ISeatLocker seatLocker) {
-        this.bookingMap = new HashMap<>();
-        this.seatLocker = seatLocker;
-    }
-
-    public Booking getBooking(String bookingId) {
-        if (!bookingMap.containsKey(bookingId)) {
-            throw new NotFoundException("Booking Not Found!");
+    public void createBooking(BookingDTO bookingDTO) {
+        // Check the availability of seats
+        // 1. Find the seats locked for this showID
+        final List<String> lockedSeatsByShowId = seatLockService.findLockedSeatsByShowId(bookingDTO.getShowId());
+        // 2. Find the seats need to be booked
+        final List<String> toBeBookedSeats = CommonUtils.csvToString(bookingDTO.getSeats());
+        // 3. Find the intersection of two seat lists
+        final List<String> commonSeats = CommonUtils.intersection(lockedSeatsByShowId, toBeBookedSeats);
+        // 4. If some common elements found, don't allow booking
+        if (!commonSeats.isEmpty()) {
+            throw new SeatAlreadyBookedException("Some seats are already booked");
         }
-        return bookingMap.get(bookingId);
+
+        bookingRepository.save(bookingDTO.transform());
+
+        // 1. Acquire Lock on the bookingDTO.seats and push the same to DB
+        seatLockService.acquireLock(bookingDTO.getUserId(), bookingDTO.getShowId(), bookingDTO.getSeats());
     }
 
-    public List<Booking> getAllBookings(Show show) {
-        List<Booking> bookings = new ArrayList<>();
-        for (Booking booking : bookingMap.values()) {
-            if (booking.getShow().equals(show)) {
-                bookings.add(booking);
-            }
-        }
-        return bookings;
-    }
-
-    public Booking createBooking(String userId, Show show, List<Seat> seats) {
-        if (isAnySeatAlreadyBooked(show, seats)) {
-            throw new SeatPermanentlyUnavailableException("Seat not available!");
-        }
-        seatLocker.lockSeats(show, seats, userId);
-        final String bookingId = UUID.randomUUID().toString();
-        final Booking booking = new Booking(bookingId, show, seats, userId);
-        bookingMap.put(bookingId, booking);
-        return booking;
-    }
-
-    public List<Seat> getBookedSeats(Show show) {
-        return getAllBookings(show).stream()
-                .filter(Booking::isConfirmed)
-                .map(Booking::getBookedSeats)
-                .flatMap(Collection::stream)
+    public List<BookingDTO> getAllBookings(Long showId) {
+        return bookingRepository.findByShowId(showId)
+                .stream()
+                .map(Booking::transform)
                 .collect(Collectors.toList());
     }
 
-    public void confirmBooking(Booking booking, String user) {
-        if (!booking.getUser().equals(user)) {
-            throw new BadRequestException("Bad Request!");
+    public BookingDTO findByBookingId(Long bookingId) {
+        final Optional<Booking> byId = bookingRepository.findById(bookingId);
+        if (!byId.isPresent()) {
+            throw new BookingNotFoundException("Booking Not Found!");
         }
-        for (Seat seat : booking.getBookedSeats()) {
-            if (!seatLocker.validateLock(booking.getShow(), seat, user)) {
-                throw new BadRequestException("Bad Request!");
-            }
-        }
-        booking.confirmBooking();
+        return byId.get().transform();
     }
 
-    private boolean isAnySeatAlreadyBooked(Show show, List<Seat> seats) {
-        final List<Seat> bookedSeats = getBookedSeats(show);
-        for (Seat seat : seats) {
-            if (bookedSeats.contains(seat)) {
-                return true;
-            }
-        }
-        return false;
+    public List<BookingDTO> findByUserId(Long userId) {
+        return bookingRepository.findByUserId(userId)
+                .stream()
+                .map(Booking::transform)
+                .collect(Collectors.toList());
     }
+
+
 }

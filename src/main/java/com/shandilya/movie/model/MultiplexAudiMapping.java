@@ -7,21 +7,17 @@ import lombok.NoArgsConstructor;
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
-import java.util.Date;
+import javax.persistence.Table;
 
 @Entity
 @Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class SeatLock {
+public class MultiplexAudiMapping {
     @Id
-    @Getter
     @GeneratedValue
     private Long id;
-    private Long userId;
-    private Long showId;
-    private Date startTime;
-    private String bookedSeats;
-    private Integer timeoutSeconds;
+    private Long multiplexId;
+    private Long audiId;
 }

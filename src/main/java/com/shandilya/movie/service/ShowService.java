@@ -1,41 +1,84 @@
 package com.shandilya.movie.service;
 
-import com.shandilya.movie.exceptions.NotFoundException;
-import com.shandilya.movie.model.Movie;
-import com.shandilya.movie.model.Screen;
-import com.shandilya.movie.model.Show;
+import com.shandilya.movie.dto.ShowDTO;
+import com.shandilya.movie.exceptions.AudiNotFoundException;
+import com.shandilya.movie.exceptions.AudiNotPresentInMultiplexException;
+import com.shandilya.movie.exceptions.MovieNotFoundException;
+import com.shandilya.movie.exceptions.MultiplexNotFoundException;
+import com.shandilya.movie.model.*;
+import com.shandilya.movie.repository.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import java.util.List;
+import java.util.Optional;
 
-import java.util.*;
-
+@Service
+@RequiredArgsConstructor
 public class ShowService {
 
-    private final Map<String, Show> shows;
+    private final AudiRepository audiRepository;
+    private final ShowRepository showRepository;
+    private final MovieRepository movieRepository;
+    private final MultiplexRepository multiplexRepository;
+    private final ShowSeatMatrixRepository showSeatMatrixRepository;
+    private final MultiplexAudiMappingRepository multiplexAudiMappingRepository;
 
-    public ShowService() {
-        this.shows = new HashMap<>();
-    }
+    public void createShow(ShowDTO showDTO) {
+        final Optional<Movie> movie = movieRepository.findById(showDTO.getMovieId());
+        final Optional<Audi> audi = audiRepository.findById(showDTO.getAudiId());
+        final Optional<Multiplex> multiplex = multiplexRepository.findById(showDTO.getMultiplexId());
+        final List<MultiplexAudiMapping> mapping = multiplexAudiMappingRepository.findByMultiplexId(showDTO.getMultiplexId());
 
-    public Show getShow(String showId) {
-        if (!shows.containsKey(showId)) {
-            throw new NotFoundException("Show not found!");
+        if (!movie.isPresent()) {
+            throw new MovieNotFoundException("Movie Not Found");
         }
-        return shows.get(showId);
+
+        if (!audi.isPresent()) {
+            throw new AudiNotFoundException("Audi Not Found");
+        }
+
+        if (!multiplex.isPresent()) {
+            throw new MultiplexNotFoundException("Multiplex Not Found");
+        }
+
+        if (!isAudiPresentInMultiplex(mapping, audi.get())) {
+            throw new AudiNotPresentInMultiplexException("Audi Not Present In the Multiplex");
+        }
+
+        // TODO : Handle the overlapping time for show creation
+
+        final Show save = showRepository.save(showDTO.transform());
+        final Long showId = save.getId();
+        initialiseShowSeatMatrix(showId, showDTO.getAudiId());
     }
 
-    public Show createShow(Movie movie, Screen screen, Date startTime, Integer duration) {
-        final String showId = UUID.randomUUID().toString();
-        Show show = new Show(showId, movie, screen, startTime, duration);
-        shows.put(showId, show);
-        return show;
-    }
-
-    private List<Show> getShowsForScreen(Screen screen) {
-        List<Show> showList = new ArrayList<>();
-        for (Show show : shows.values()) {
-            if (show.getScreen().equals(screen)) {
-                showList.add(show);
+    private boolean isAudiPresentInMultiplex(List<MultiplexAudiMapping> mapping, Audi audi) {
+        boolean isPresent = false;
+        for (MultiplexAudiMapping map : mapping) {
+            if (map.getAudiId().equals(audi.getId())) {
+                isPresent = true;
+                break;
             }
         }
-        return showList;
+        return isPresent;
+    }
+
+    private void initialiseShowSeatMatrix(Long showId, Long audiId) {
+        StringBuilder stringBuilder = new StringBuilder();
+        final Optional<Audi> audi = audiRepository.findById(audiId);
+        if (!audi.isPresent()) {
+            throw new AudiNotFoundException("Audi Not Found!");
+        }
+        final Audi audiDet = audi.get();
+        final int totalSeats = audiDet.getSeatRows() * audiDet.getSeatColumns();
+        for (int i = 1; i <= totalSeats ; i++) {
+            stringBuilder.append(i).append(",");
+        }
+        String seatsAvailable = stringBuilder.toString();
+        final ShowSeatMatrix seatMatrix = ShowSeatMatrix.builder()
+                .availableSeats(seatsAvailable)
+                .showId(showId)
+                .build();
+        showSeatMatrixRepository.save(seatMatrix);
     }
 }
